@@ -58,4 +58,3 @@ Shot planning is heuristic geometry, not a rigid-body simulation. It does not mo
 ## License
 
 MIT. See `LICENSE`.
-# CarromAim
