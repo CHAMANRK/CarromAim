@@ -24,6 +24,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.dp
 import com.example.carromassist.model.*
+import com.example.carromassist.capture.ProjectionSessionService
 import com.example.carromassist.physics.ShotPlanner
 import com.example.carromassist.vision.SyntheticBoard
 import kotlin.math.cos
@@ -33,9 +34,9 @@ class MainActivity : ComponentActivity() {
     private val captureConsent = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         // Projection consent is single-session only; never persist or reuse the result.
         if (result.resultCode == Activity.RESULT_OK && result.data != null) {
-            val serviceIntent = Intent(this, capture.ProjectionSessionService::class.java).apply {
-                putExtra(capture.ProjectionSessionService.EXTRA_RESULT_CODE, result.resultCode)
-                putExtra(capture.ProjectionSessionService.EXTRA_RESULT_DATA, result.data)
+            val serviceIntent = Intent(this, ProjectionSessionService::class.java).apply {
+                putExtra(ProjectionSessionService.EXTRA_RESULT_CODE, result.resultCode)
+                putExtra(ProjectionSessionService.EXTRA_RESULT_DATA, result.data)
             }
             if (android.os.Build.VERSION.SDK_INT >= 26) startForegroundService(serviceIntent) else startService(serviceIntent)
         }
@@ -101,8 +102,8 @@ private fun CarromApp(onCapture: () -> Unit, onOverlay: () -> Unit) {
 private fun BoardPreview(board: BoardState, shot: ShotRecommendation?) {
     Canvas(Modifier.fillMaxWidth().height(280.dp).background(Color(0xFFB9854E), RoundedCornerShape(12.dp)).padding(12.dp)) {
         val scale = minOf(size.width / board.width.toFloat(), size.height / board.height.toFloat())
-        val ox = (size.width - board.width * scale) / 2f
-        val oy = (size.height - board.height * scale) / 2f
+        val ox = (size.width - board.width.toFloat() * scale) / 2f
+        val oy = (size.height - board.height.toFloat() * scale) / 2f
         fun p(v: Vec2) = Offset(ox + v.x.toFloat() * scale, oy + v.y.toFloat() * scale)
         drawRect(Color(0xFFE9C99A), topLeft = Offset(ox, oy), size = androidx.compose.ui.geometry.Size(board.width.toFloat()*scale, board.height.toFloat()*scale))
         board.pockets.forEach { drawCircle(Color(0xFF25221D), it.radius.toFloat()*scale, p(it.center)) }
