@@ -17,6 +17,7 @@ import android.os.IBinder
 import android.util.DisplayMetrics
 import android.view.WindowManager
 import androidx.core.app.NotificationCompat
+import com.example.carromassist.overlay.AimBubbleService
 import java.util.concurrent.atomic.AtomicBoolean
 
 /** User-consented, local frame capture. No frame data leaves the device. */
@@ -46,7 +47,8 @@ class ProjectionSessionService : Service() {
         if (intent?.action == ACTION_STOP) { stopCapture(); stopSelf(); return START_NOT_STICKY }
         if (intent?.action == ACTION_PAUSE) { paused.set(true); return START_NOT_STICKY }
         if (intent?.action == ACTION_RESUME) { paused.set(false); return START_NOT_STICKY }
-        startForeground(NOTIFICATION_ID, notification("Screen analysis is active"))
+        startForeground(NOTIFICATION_ID, notification("Screen capture starting"))
+        sendStatus("CAPTURE · Starting screen session")
         val resultCode = intent?.getIntExtra(EXTRA_RESULT_CODE, ActivityResult.RESULT_CANCELED) ?: ActivityResult.RESULT_CANCELED
         val data: Intent? = getProjectionIntent(intent)
         if (resultCode != ActivityResult.RESULT_OK || data == null) { stopSelf(); return START_NOT_STICKY }
@@ -86,6 +88,7 @@ class ProjectionSessionService : Service() {
                                 preview.compress(Bitmap.CompressFormat.JPEG, 72, out)
                                 val bytes = out.toByteArray()
                                 sendBroadcast(Intent(ACTION_FRAME).setPackage(packageName).putExtra(EXTRA_FRAME_JPEG, bytes))
+                        sendStatus("CAPTURE · Frame received")
                                 out.close()
                                 if (preview !== cropped) preview.recycle()
                                 cropped.recycle()
@@ -96,6 +99,7 @@ class ProjectionSessionService : Service() {
             }, handler)
             projection?.registerCallback(callback, handler)
             createDisplay(metrics.widthPixels, metrics.heightPixels)
+            sendStatus("CAPTURE · Waiting for first frame")
         } catch (_: SecurityException) { stopCapture(); stopSelf() }
           catch (_: RuntimeException) { stopCapture(); stopSelf() }
         return START_NOT_STICKY
@@ -139,6 +143,7 @@ class ProjectionSessionService : Service() {
                             val preview = if (scale < 1f) Bitmap.createScaledBitmap(crop, (crop.width*scale).toInt().coerceAtLeast(1), (crop.height*scale).toInt().coerceAtLeast(1), true) else crop
                             val out = ByteArrayOutputStream(); preview.compress(Bitmap.CompressFormat.JPEG, 72, out)
                             sendBroadcast(Intent(ACTION_FRAME).setPackage(packageName).putExtra(EXTRA_FRAME_JPEG, out.toByteArray()))
+                            sendStatus("CAPTURE · Frame received")
                             out.close(); if (preview !== crop) preview.recycle(); crop.recycle()
                         } catch (_: Exception) { }
                     }
@@ -150,6 +155,7 @@ class ProjectionSessionService : Service() {
 
     private fun stopCapture() {
         if (!stopped.compareAndSet(false, true)) return
+        sendStatus("CAPTURE · Stopped")
         try { reader?.setOnImageAvailableListener(null, null) } catch (_: RuntimeException) { }
         try { display?.release() } catch (_: RuntimeException) { }
         try { reader?.close() } catch (_: RuntimeException) { }
@@ -158,6 +164,10 @@ class ProjectionSessionService : Service() {
         display = null; reader = null; projection = null
         worker?.quitSafely(); worker = null; handler = null
         stopForeground(STOP_FOREGROUND_REMOVE)
+    }
+
+    private fun sendStatus(message: String) {
+        sendBroadcast(Intent(AimBubbleService.ACTION_STATUS).setPackage(packageName).putExtra(AimBubbleService.EXTRA_STATUS, message))
     }
 
     private fun notification(message: String) = NotificationCompat.Builder(this, CHANNEL)

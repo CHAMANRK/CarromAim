@@ -1,23 +1,25 @@
-# Carrom Vision Assist — captured-screen preview milestone
+# Carrom Vision Assist — Status Pill Prototype
 
-This Android project currently includes:
-- Android MediaProjection permission flow and foreground capture service.
-- A local, throttled screenshot preview (JPEG scaled to max 900 px) delivered only inside the app.
-- A **Show captured screen / Hide captured screen** button in the app.
-- A synthetic board + simple shot-planner demo.
-- A floating AIM ON/OFF control prototype.
+Android Kotlin/Compose prototype. The floating overlay now includes a single-line status pill across the top of the screen plus a separate draggable AIM ON/OFF control.
 
-## Important current limitations
-- The captured preview is the screen image, not an automatically cropped/detected carrom board yet.
-- Live board, striker and coin detection is **not implemented** in this milestone.
-- The aim overlay is **not yet connected** to live detection or real Carrom Pool shot calculations.
-- No automatic shot input is implemented.
+## Overlay status examples
+- `JARVIS · Overlay ready`
+- `CAPTURE · Starting screen session`
+- `CAPTURE · Waiting for first frame`
+- `CAPTURE · Frame received`
+- `CAPTURE · Stopped`
+- `AIM ON · Detection not connected`
 
-## Test flow
-1. Build/install the APK from GitHub Actions.
-2. Open Carrom Vision Assist and tap **Start screen capture**.
-3. Accept Android's screen-capture prompt.
-4. Open Carrom Pool, then return to Carrom Vision Assist.
-5. Tap **Show captured screen** to inspect the latest captured frame. The frame updates while the capture session remains active.
+The status pill only reports capture lifecycle/frame arrival. Live Carrom Pool board/coin detection and computed aiming are **not implemented yet**; AIM ON is not an actual aim engine.
 
-The project uses Android's explicit user-consent screen-capture API. Captured frames are processed locally and are not uploaded by the app.
+## Build
+Open the repository in GitHub and run **Actions → Android CI → Run workflow**. Download `carrom-vision-assist-debug-apk` if the build succeeds.
+
+## Test
+1. Install the generated APK.
+2. Open the app and grant Display over other apps.
+3. Tap **Start floating aim button** to show the one-line status pill and AIM control.
+4. Start screen capture and approve Android's screen capture prompt.
+5. Switch to Carrom Pool. The pill should change to `CAPTURE · Frame received` once frames arrive.
+
+Screen capture requires explicit Android consent. If the pill remains at `Waiting for first frame`, capture is not delivering frames; check Android's projection permission and the app's foreground notification.
