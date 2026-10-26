@@ -1,6 +1,10 @@
 package com.example.carromassist
 
 import android.app.Activity
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.content.BroadcastReceiver
+import android.content.IntentFilter
 import android.content.Context
 import android.content.Intent
 import android.media.projection.MediaProjectionManager
@@ -11,6 +15,11 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -31,6 +40,18 @@ import kotlin.math.cos
 import kotlin.math.sin
 
 class MainActivity : ComponentActivity() {
+    private var capturedFrame by mutableStateOf<Bitmap?>(null)
+    private val frameReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            val bytes = intent?.getByteArrayExtra(ProjectionSessionService.EXTRA_FRAME_JPEG) ?: return
+            BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.let { next ->
+                val old = capturedFrame
+                capturedFrame = next
+                if (old !== next && old != null && !old.isRecycled) old.recycle()
+            }
+        }
+    }
+
     private val captureConsent = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         // Projection consent is single-session only; never persist or reuse the result.
         if (result.resultCode == Activity.RESULT_OK && result.data != null) {
@@ -43,7 +64,15 @@ class MainActivity : ComponentActivity() {
     }
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        val filter = IntentFilter(ProjectionSessionService.ACTION_FRAME)
+        if (android.os.Build.VERSION.SDK_INT >= 33) {
+            registerReceiver(frameReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            @Suppress("DEPRECATION")
+            registerReceiver(frameReceiver, filter)
+        }
         setContent { CarromApp(
+            capturedFrame = capturedFrame,
             onCapture = {
                 val mgr = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
                 captureConsent.launch(mgr.createScreenCaptureIntent())
@@ -57,26 +86,35 @@ class MainActivity : ComponentActivity() {
             }
         ) }
     }
+    override fun onDestroy() {
+        try { unregisterReceiver(frameReceiver) } catch (_: Exception) { }
+        super.onDestroy()
+    }
 }
 
 @Composable
-private fun CarromApp(onCapture: () -> Unit, onOverlay: () -> Unit) {
+private fun CarromApp(capturedFrame: Bitmap?, onCapture: () -> Unit, onOverlay: () -> Unit) {
+    var showCaptured by remember { mutableStateOf(false) }
     var demo by remember { mutableStateOf(true) }
     var selected by remember { mutableStateOf(0) }
     val board = remember(demo) { if (demo) SyntheticBoard.create() else null }
     val shots = remember(board) { board?.let { ShotPlanner().recommend(it) }.orEmpty() }
     MaterialTheme(colorScheme = darkColorScheme(primary = Color(0xFF79E0C3), background = Color(0xFF101613), surface = Color(0xFF1A2420))) {
         Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-            Column(Modifier.fillMaxSize().padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                 Text("CARROM VISION", style = MaterialTheme.typography.headlineSmall, color = Color(0xFF79E0C3))
                 Text("JARVIS CARROM · Simple-shot prototype", color = Color.LightGray)
                 Card(colors = CardDefaults.cardColors(containerColor = Color(0xFF1A2420))) {
                     Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text("Synthetic board demo", style = MaterialTheme.typography.titleMedium)
-                        Text("Demo mode calculates sample shots only. The floating 🎯 button is a UI toggle; live Carrom Pool detection is not connected yet.")
+                        Text("Live capture sends a local preview from your screen to this app. Board/coin detection is not implemented yet, so the preview is not an automatic board detection result.")
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Button(onClick = { demo = true }) { Text("Demo mode") }
-                            OutlinedButton(onClick = onCapture) { Text("Request capture") }
+                            Button(onClick = onCapture) { Text("Start screen capture") }
+                            OutlinedButton(onClick = { showCaptured = !showCaptured }, enabled = capturedFrame != null) { Text(if (showCaptured) "Hide captured screen" else "Show captured screen") }
+                        }
+                        Text(if (capturedFrame == null) "No captured frame yet. Start capture, allow Android's prompt, then open Carrom Pool and return here to view the latest frame." else "Captured frame available · updated about every 0.7 seconds", color = Color(0xFF79E0C3), style = MaterialTheme.typography.bodySmall)
+                        if (showCaptured && capturedFrame != null) {
+                            Image(bitmap = capturedFrame.asImageBitmap(), contentDescription = "Latest captured screen", modifier = Modifier.fillMaxWidth().heightIn(max = 520.dp), contentScale = ContentScale.Fit)
                         }
                     }
                 }
@@ -94,7 +132,7 @@ private fun CarromApp(onCapture: () -> Unit, onOverlay: () -> Unit) {
                     } else Text("No reliable shot found.")
                 }
                 OutlinedButton(onClick = onOverlay, modifier = Modifier.fillMaxWidth()) { Text("Start floating aim button") }
-                Text("How to use: grant overlay permission, return here, then tap Start floating aim button. Drag the bubble to move it; tap to switch AIM ON/OFF. This is currently a control prototype, not live auto-aim.", color = Color(0xFFFFD18A), style = MaterialTheme.typography.bodySmall)
+                Text("Next milestone: use the captured frame to detect the actual board region, then draw a calculated aim line. The current screen preview is real capture; the sample board above is still synthetic.", color = Color(0xFFFFD18A), style = MaterialTheme.typography.bodySmall)
             }
         }
     }

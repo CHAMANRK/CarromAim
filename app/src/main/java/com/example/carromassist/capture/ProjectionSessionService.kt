@@ -4,6 +4,9 @@ import android.app.*
 import android.content.Context
 import android.content.Intent
 import android.graphics.PixelFormat
+import android.graphics.Bitmap
+import java.io.ByteArrayOutputStream
+import java.nio.ByteBuffer
 import android.media.ImageReader
 import android.media.projection.MediaProjection
 import android.media.projection.MediaProjectionManager
@@ -26,6 +29,7 @@ class ProjectionSessionService : Service() {
     private val paused = AtomicBoolean(false)
     private val stopped = AtomicBoolean(false)
     private var lastFrameAt = 0L
+    private var lastBroadcastAt = 0L
 
     private val callback = object : MediaProjection.Callback() {
         override fun onStop() { stopCapture() }
@@ -59,10 +63,35 @@ class ProjectionSessionService : Service() {
                 val now = System.nanoTime()
                 if (now - lastFrameAt < 66_000_000L) { source.acquireLatestImage()?.close(); return@setOnImageAvailableListener }
                 lastFrameAt = now
-                // Acquire latest only and close immediately: bounded queue, local processing hook.
+                // Convert a throttled frame to a small JPEG and send it only to this app.
                 source.acquireLatestImage()?.use { image ->
-                    // Pixel conversion/detection is intentionally not advertised as complete in this baseline.
-                    image.width; image.height
+                    if (now - lastBroadcastAt >= 700_000_000L) {
+                        lastBroadcastAt = now
+                        try {
+                            val plane = image.planes.firstOrNull()
+                            if (plane != null) {
+                                val pixelStride = plane.pixelStride
+                                val rowStride = plane.rowStride
+                                val rowPadding = rowStride - pixelStride * image.width
+                                val paddedWidth = image.width + rowPadding / pixelStride
+                                val buffer = plane.buffer
+                                val raw = Bitmap.createBitmap(paddedWidth, image.height, Bitmap.Config.ARGB_8888)
+                                raw.copyPixelsFromBuffer(buffer)
+                                val cropped = Bitmap.createBitmap(raw, 0, 0, image.width, image.height)
+                                raw.recycle()
+                                val maxSide = 900
+                                val scale = minOf(1f, maxSide.toFloat() / maxOf(cropped.width, cropped.height))
+                                val preview = if (scale < 1f) Bitmap.createScaledBitmap(cropped, (cropped.width * scale).toInt().coerceAtLeast(1), (cropped.height * scale).toInt().coerceAtLeast(1), true) else cropped
+                                val out = ByteArrayOutputStream()
+                                preview.compress(Bitmap.CompressFormat.JPEG, 72, out)
+                                val bytes = out.toByteArray()
+                                sendBroadcast(Intent(ACTION_FRAME).setPackage(packageName).putExtra(EXTRA_FRAME_JPEG, bytes))
+                                out.close()
+                                if (preview !== cropped) preview.recycle()
+                                cropped.recycle()
+                            }
+                        } catch (_: Exception) { /* Skip malformed frame; next frame can recover. */ }
+                    }
                 }
             }, handler)
             projection?.registerCallback(callback, handler)
@@ -93,7 +122,28 @@ class ProjectionSessionService : Service() {
             display?.release(); display = null
             reader?.close()
             reader = ImageReader.newInstance(width, height, PixelFormat.RGBA_8888, 2)
-            reader?.setOnImageAvailableListener({ source -> if (paused.get() || stopped.get()) source.acquireLatestImage()?.close() else source.acquireLatestImage()?.close() }, handler)
+            reader?.setOnImageAvailableListener({ source ->
+                if (paused.get() || stopped.get()) source.acquireLatestImage()?.close()
+                else source.acquireLatestImage()?.use { image ->
+                    val now = System.nanoTime()
+                    if (now - lastBroadcastAt >= 700_000_000L) {
+                        lastBroadcastAt = now
+                        try {
+                            val plane = image.planes.firstOrNull() ?: return@use
+                            val pixelStride = plane.pixelStride; val rowStride = plane.rowStride
+                            val paddedWidth = image.width + (rowStride - pixelStride * image.width) / pixelStride
+                            val raw = Bitmap.createBitmap(paddedWidth, image.height, Bitmap.Config.ARGB_8888)
+                            raw.copyPixelsFromBuffer(plane.buffer)
+                            val crop = Bitmap.createBitmap(raw, 0, 0, image.width, image.height); raw.recycle()
+                            val scale = minOf(1f, 900f / maxOf(crop.width, crop.height))
+                            val preview = if (scale < 1f) Bitmap.createScaledBitmap(crop, (crop.width*scale).toInt().coerceAtLeast(1), (crop.height*scale).toInt().coerceAtLeast(1), true) else crop
+                            val out = ByteArrayOutputStream(); preview.compress(Bitmap.CompressFormat.JPEG, 72, out)
+                            sendBroadcast(Intent(ACTION_FRAME).setPackage(packageName).putExtra(EXTRA_FRAME_JPEG, out.toByteArray()))
+                            out.close(); if (preview !== crop) preview.recycle(); crop.recycle()
+                        } catch (_: Exception) { }
+                    }
+                }
+            }, handler)
             createDisplay(width, height)
         } catch (_: RuntimeException) { stopCapture() }
     }
@@ -123,6 +173,8 @@ class ProjectionSessionService : Service() {
         const val ACTION_PAUSE = "com.example.carromassist.PAUSE"
         const val ACTION_RESUME = "com.example.carromassist.RESUME"
         const val ACTION_STOP = "com.example.carromassist.STOP"
+        const val ACTION_FRAME = "com.example.carromassist.FRAME"
+        const val EXTRA_FRAME_JPEG = "frame_jpeg"
         private const val CHANNEL = "capture_session"
         private const val NOTIFICATION_ID = 7421
     }
