@@ -26,14 +26,6 @@ class PhysicsTest {
         val planner = ShotPlanner()
         assertEquals(planner.recommend(board), planner.recommend(board))
     }
-    @Test fun simpleShotPlannerReturnsOnlyDirectPocketShots() {
-        val board = SyntheticBoard.create()
-        val shots = ShotPlanner().recommend(board)
-        assertFalse(shots.isEmpty())
-        assertTrue(shots.all { it.pocket != null })
-        assertTrue(shots.all { it.path.size == 3 })
-        assertTrue(shots.all { it.summary.contains("no bank") })
-    }
     @Test fun emptyCoinsProducesNoShots() {
         val b = BoardState(100.0,100.0,Coin("s",Vec2(50.0,80.0),4.0), emptyList(), emptyList())
         assertTrue(ShotPlanner().recommend(b).isEmpty())

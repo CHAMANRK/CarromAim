@@ -8,5 +8,6 @@
             <intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter>
         </activity>
         <service android:name=".capture.ProjectionSessionService" android:exported="false" android:foregroundServiceType="mediaProjection" />
+        <service android:name=".overlay.AimBubbleService" android:exported="false" />
     </application>
 </manifest>
