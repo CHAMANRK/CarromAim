@@ -66,12 +66,12 @@ private fun CarromApp(onCapture: () -> Unit, onOverlay: () -> Unit) {
     MaterialTheme(colorScheme = darkColorScheme(primary = Color(0xFF79E0C3), background = Color(0xFF101613), surface = Color(0xFF1A2420))) {
         Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
             Column(Modifier.fillMaxSize().padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                Text("CARROM VISION", style = MaterialTheme.typography.headlineSmall, color = Color(0xFF79E0C3))
-                Text("Visual decision support · on-device", color = Color.LightGray)
+                Text("JARVIS · SIMPLE SHOTS", style = MaterialTheme.typography.headlineSmall, color = Color(0xFF79E0C3))
+                Text("Direct pocket shots · no bank shots", color = Color.LightGray)
                 Card(colors = CardDefaults.cardColors(containerColor = Color(0xFF1A2420))) {
                     Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("Synthetic board demo", style = MaterialTheme.typography.titleMedium)
-                        Text("Try deterministic shot geometry without opening a game.")
+                        Text("Simple-shot practice board", style = MaterialTheme.typography.titleMedium)
+                        Text("Test straight pot-shot recommendations on a sample board. Live game detection is not connected yet.")
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             Button(onClick = { demo = true }) { Text("Demo mode") }
                             OutlinedButton(onClick = onCapture) { Text("Request capture") }
@@ -80,11 +80,16 @@ private fun CarromApp(onCapture: () -> Unit, onOverlay: () -> Unit) {
                 }
                 if (board != null) {
                     BoardPreview(board, shots.getOrNull(selected))
-                    Text("Candidates: ${shots.size} · Source: synthetic fixture", color = Color.LightGray)
+                    Text("Direct-shot candidates: ${shots.size} · Demo board", color = Color.LightGray)
                     if (shots.isNotEmpty()) {
                         Text("Recommended: ${shots[selected.coerceIn(0, shots.lastIndex)].targetId}")
                         Text(shots[selected.coerceIn(0, shots.lastIndex)].summary)
-                        Text("Geometry confidence: ${(shots[selected.coerceIn(0, shots.lastIndex)].confidence * 100).toInt()}%")
+                        Text("Geometry score: ${(shots[selected.coerceIn(0, shots.lastIndex)].confidence * 100).toInt()}% · not a success probability")
+                        val currentShot = shots[selected.coerceIn(0, shots.lastIndex)]
+                        Text("Aim angle: ${"%.1f".format(Math.toDegrees(currentShot.angleRadians))}°")
+                        val strikerTravel = board.striker.center.distance(currentShot.contactPoint)
+                        val powerEstimate = (35.0 + 55.0 * (strikerTravel / (board.width * 0.55)).coerceIn(0.0, 1.0)).toInt()
+                        Text("Starting power estimate: $powerEstimate% · tune in-game")
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             OutlinedButton(onClick = { selected = (selected - 1).coerceAtLeast(0) }, enabled = selected > 0) { Text("Previous") }
                             Button(onClick = { selected = (selected + 1).coerceAtMost(shots.lastIndex) }, enabled = selected < shots.lastIndex) { Text("Next shot") }
@@ -92,7 +97,7 @@ private fun CarromApp(onCapture: () -> Unit, onOverlay: () -> Unit) {
                     } else Text("No reliable shot found.")
                 }
                 OutlinedButton(onClick = onOverlay, modifier = Modifier.fillMaxWidth()) { Text("Overlay permission settings") }
-                Text("Capture sessions are permission-gated. Frame acquisition is local; live board detection and overlay guidance are not yet connected.", color = Color(0xFFFFD18A), style = MaterialTheme.typography.bodySmall)
+                Text("Next step: connect screen capture to live board/puck detection. For now, recommendations use the sample board only; no shots are sent to Carrom Pool.", color = Color(0xFFFFD18A), style = MaterialTheme.typography.bodySmall)
             }
         }
     }

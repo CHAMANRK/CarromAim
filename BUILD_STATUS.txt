@@ -1,0 +1,14 @@
+Jarvis Carrom Vision Assist - Simple Shots update
+
+Implemented in source:
+- Direct pocket shots only (no bank shots)
+- Ghost-ball contact geometry for the target coin
+- Obstacle checks for striker-to-contact and coin-to-pocket paths
+- Aim angle and rough starting-power estimate in the demo UI
+- Unit test for direct-shot recommendation shape
+
+Important current limits:
+- This is still the synthetic demo board; live Carrom Pool board/puck detection is not connected.
+- It recommends shots; it does not automatically execute taps or shots.
+- Power is a rough starting estimate and needs in-game calibration.
+- Build/tests could not be run in this environment because Gradle distribution download failed due to DNS/network unavailability. Use GitHub Actions to verify build and tests.

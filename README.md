@@ -5,7 +5,8 @@ An Android Kotlin/Jetpack Compose app for **visual shot recommendations only**. 
 ## Current implementation status
 
 - [x] Dark Compose UI and synthetic board demo
-- [x] Deterministic geometric shot recommendations and circle contact geometry
+- [x] Deterministic direct-pocket shot recommendations (no bank shots) and ghost-ball contact geometry
+- [x] Angle display and rough starting-power estimate for demo shots
 - [x] Segment obstacle checks, pocket line-of-sight checks, reflection helpers, and boundary-ray helper
 - [x] Unit tests for baseline physics
 - [x] Explicit MediaProjection consent request passed to a mediaProjection foreground service
@@ -53,7 +54,7 @@ Push the project root to GitHub. The `Android CI` workflow runs on push, pull re
 
 ## Physics limitations
 
-Shot planning is heuristic geometry, not a rigid-body simulation. It does not model spin, variable restitution, board-specific rules, or guarantee pocketing. Confidence is a geometry score, not a calibrated probability.
+Shot planning currently recommends only direct, unbanked pot shots. It is heuristic geometry, not a rigid-body simulation; it does not model spin, variable restitution, board-specific rules, or guarantee pocketing. The displayed angle and power are starting estimates for the synthetic demo board. Confidence is a geometry score, not a calibrated probability. Live Carrom Pool detection is not connected yet.
 
 ## License
 
